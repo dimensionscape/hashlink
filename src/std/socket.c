@@ -275,17 +275,35 @@ HL_PRIM bool hl_socket_listen( hl_socket *s, int n ) {
 }
 
 HL_PRIM bool hl_socket_bind( hl_socket *s, int host, int port ) {
+	// guard
+	if( s == NULL ) 
+		return false;
+
+	// prepare sockaddr_in
 	struct sockaddr_in addr;
-	if( !s ) return false;
-	memset(&addr,0,sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons((unsigned short)port);
-	*(int*)&addr.sin_addr.s_addr = host;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family      = AF_INET;
+	addr.sin_port        = htons((unsigned short)port);
+	*(int*)&addr.sin_addr.s_addr = host;           // host may be 0.0.0.0
+
 	#ifndef HL_WIN
 	int opt = 1;
-	setsockopt(s->sock,SOL_SOCKET,SO_REUSEADDR,(char*)&opt,sizeof(opt));
+	setsockopt(s->sock, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
 	#endif
-	return bind(s->sock,(struct sockaddr*)&addr,sizeof(addr)) != SOCKET_ERROR;
+
+	/* --- bind --- */
+	if( bind(s->sock, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR )
+		return false;
+
+	{
+		struct sockaddr_in name;
+		socklen_t nlen = sizeof(name);
+		if( getsockname(s->sock, (struct sockaddr*)&name, &nlen) == 0 ) {
+			*(int*)&s->addr.sin_addr = name.sin_addr.s_addr;
+			s->addr.sin_port        = name.sin_port;
+		}
+	}
+	return true;
 }
 
 HL_PRIM hl_socket *hl_socket_accept( hl_socket *s ) {
